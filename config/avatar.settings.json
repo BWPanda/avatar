@@ -1,0 +1,9 @@
+{
+    "_config_name": "avatar.settings",
+    "picture_type": "upload",
+    "type": "initials",
+    "data_source": "username",
+    "style": "square",
+    "bg_color": "random",
+    "bg_color_value": "#000000"
+}

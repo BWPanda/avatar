@@ -1,0 +1,258 @@
+<?php
+/**
+ * @file
+ * Automatically generate avatars for user accounts.
+ *
+ * TODO:
+ * - Regenerate all user avatars when changing avatar settings.
+ * - Regenerate when picture type is avatar and username, etc. changes.
+ */
+
+/**
+ * Implements hook_config_info().
+ */
+function avatar_config_info() {
+  return array(
+    'avatar.settings' => array(
+      'label' => t('Avatar settings'),
+      'group' => t('Configuration'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function avatar_menu() {
+  return array(
+    'admin/config/people/avatar' => array(
+      'title' => 'Avatar settings',
+      'description' => 'Configure auto-generated user avatars.',
+      'page callback' => 'backdrop_get_form',
+      'page arguments' => array('avatar_settings_form'),
+      'access arguments' => array('administer account settings'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for user_admin_settings.
+ */
+function avatar_form_user_admin_settings_alter(&$form, &$form_state, $form_id) {
+  $config = config('avatar.settings');
+
+  // Add radio buttons for selecting avatar or uploaded pictures.
+  $form['personalization']['picture_type'] = array(
+    '#type' => 'radios',
+    '#title' => t('Picture type'),
+    '#options' => array(
+      'upload' => t('Upload (manual)'),
+      'avatar' => t('Avatar (automatic)'),
+      'fallback' => t('Upload, with avatar fallback'),
+    ),
+    '#default_value' => $config->get('picture_type'),
+    '#weight' => 1,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="user_pictures"]' => array('checked' => FALSE),
+      ),
+    ),
+    '#config' => 'avatar.settings',
+  );
+  $form['personalization']['picture_type']['upload']['#description'] = t('Let users manually upload their own pictures.');
+  $form['personalization']['picture_type']['avatar']['#description'] = t('Automatically generate avatars for users. See the <a href="@settings">Avatar settings</a> for configuration.', array('@settings' => url('admin/config/people/avatar')));
+  $form['personalization']['picture_type']['fallback']['#description'] = t("Avatars are generated for users who haven't uploaded a picture.");
+
+  // Customise the default form.
+  $form['personalization']['pictures']['#weight'] = 2;
+  $form['personalization']['pictures']['user_picture_default']['#states'] = array(
+    'visible' => array(
+      ':input[name="picture_type"]' => array('value' => 'upload'),
+    ),
+  );
+  $form['personalization']['pictures']['user_picture_dimensions']['#states'] = array(
+    'invisible' => array(
+      ':input[name="picture_type"]' => array('value' => 'avatar'),
+    ),
+  );
+  $form['personalization']['pictures']['user_picture_file_size']['#states'] = array(
+    'invisible' => array(
+      ':input[name="picture_type"]' => array('value' => 'avatar'),
+    ),
+  );
+  $form['personalization']['pictures']['user_picture_guidelines']['#states'] = array(
+    'invisible' => array(
+      ':input[name="picture_type"]' => array('value' => 'avatar'),
+    ),
+  );
+}
+
+/**
+ * Page callback: Constructs a form for configuring user avatars.
+ *
+ * @see avatar_menu()
+ */
+function avatar_settings_form($form, &$form_state) {
+  $config = config('avatar.settings');
+  $form['#config'] = 'avatar.settings';
+
+  $form['type'] = array(
+    '#type' => 'radios',
+    '#title' => t('Type'),
+    '#options' => array(
+      'initials' => t('Initials'),
+    ),
+    '#default_value' => $config->get('type'),
+  );
+  $form['type']['initials']['#description'] = t("Works best with the 'Username' data source.");
+
+  $form['data_source'] = array(
+    '#type' => 'radios',
+    '#title' => t('Data source'),
+    '#description' => t("Which user information to use for generating avatars. This will determine if/when avatars are re-generated, and if it's possible for users to trigger the generation of a new avatar for themselves."),
+    '#options' => array(
+      'username' => t('Username'),
+      'email' => t('Email address'),
+      'uid' => t('User ID'),
+    ),
+    '#default_value' => $config->get('data_source'),
+  );
+  $form['data_source']['username']['#description'] = t("Avatars will be re-generated whenever a user's username is updated (case-sensitive).");
+  $form['data_source']['email']['#description'] = t("Avatars will be re-generated whenever a user's email address is updated (not case-sentitive).");
+  $form['data_source']['uid']['#description'] = t("Avatars will never be re-generated (since a user's ID never changes).");
+
+  $form['style'] = array(
+    '#type' => 'select',
+    '#title' => 'Style',
+    '#options' => array(
+      'square' => t('Square'),
+      'round' => t('Round'),
+    ),
+    '#default_value' => $config->get('style'),
+  );
+
+  $form['bg_color'] = array(
+    '#type' => 'select',
+    '#title' => 'Background colour',
+    '#options' => array(
+      'random' => t('Random'),
+      'transparent' => t('Transparent'),
+      'value' => t('Set value...'),
+    ),
+    '#default_value' => $config->get('bg_color'),
+  );
+  $form['bg_color_value'] = array(
+    '#type' => 'color',
+    '#default_value' => $config->get('bg_color_value'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="bg_color"]' => array('value' => 'value'),
+      ),
+    ),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for user_profile_form.
+ */
+function avatar_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+  $config = config('avatar.settings');
+
+  // Hide the picture form element(s).
+  if ($config->get('picture_type') == 'avatar') {
+    unset($form['picture']);
+  }
+}
+
+/**
+ * Implements hook_user_presave().
+ */
+function avatar_user_presave($account) {
+  $config = config('avatar.settings');
+
+  // Don't continue if avatars aren't needed.
+  if (!config_get('system.core', 'user_pictures') || $config->get('picture_type') == 'upload') {
+    return;
+  }
+
+  // Check if a new avatar is needed.
+  $regenerate = FALSE;
+  $data_source = $config->get('data_source');
+  if ($data_source == 'username' && trim($account->name) != trim($account->original->name)) {
+    $regenerate = TRUE;
+  }
+  elseif ($data_source == 'email' && trim(backdrop_strtolower($account->mail)) != trim(backdrop_strtolower($account->original->mail))) {
+    $regenerate = TRUE;
+  }
+
+  // Generate an avatar.
+  if (empty($account->picture) || $regenerate) {
+    $file = avatar_generate($account);
+
+    if (isset($file->fid)) {
+      $account->picture = $file->fid;
+    }
+  }
+}
+
+/**
+ * Generate an avatar for a user.
+ */
+function avatar_generate($user) {
+  $config = config('avatar.settings');
+
+  // Get the string to use for the generation.
+  switch ($config->get('data_source')) {
+    case 'email':
+      $string = trim(backdrop_strtolower($user->mail));
+      break;
+    case 'uid':
+      $string = $user->uid;
+      break;
+    default:
+      $string = trim($user->name);
+  }
+
+  // Generate the avatar URL.
+  switch ($config->get('type')) {
+    case 'initials':
+      $rounded = $config->get('style') == 'round' ? 'true' : 'false';
+
+      // Since this type doesn't support transparency, we default to 'random'.
+      $background = 'random';
+      if ($config->get('bg_color') == 'value') {
+        $background = str_replace('#', '', $config->get('bg_color_value'));
+      }
+
+      $url = "https://ui-avatars.com/api/?name=$string&size=256&rounded=$rounded&background=$background&format=png";
+      break;
+    default:
+      return;
+  }
+
+  // Download and save the file.
+  if (isset($url)) {
+    $data = file_get_contents($url);
+
+    if ($data !== FALSE) {
+      $destination = file_default_scheme() . '://' . config_get('system.core', 'user_picture_path') . '/avatar-' . $user->uid . '.png';
+      return file_save_data($data, $destination, FILE_EXISTS_REPLACE);
+    }
+  }
+}
+
+/**
+ * Return a list of avatar types and the settings they support.
+ */
+function avatar_types() {
+  return array(
+    'initials' => array(
+      'name' => t('Initials'),
+      'settings' => array(
+
+      ),
+    ),
+  );
+}
