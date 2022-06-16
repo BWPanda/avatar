@@ -3,9 +3,7 @@
  * @file
  * Automatically generate avatars for user accounts.
  *
- * TODO:
- * - Regenerate all user avatars when changing avatar settings.
- * - Regenerate when picture type is avatar and username, etc. changes.
+ * TODO: Setup states for avatar types.
  */
 
 /**
@@ -16,6 +14,25 @@ function avatar_config_info() {
     'avatar.settings' => array(
       'label' => t('Avatar settings'),
       'group' => t('Configuration'),
+    ),
+  );
+}
+
+/**
+ * Return a list of avatar types and the settings they support.
+ */
+function avatar_types() {
+  return array(
+    'initials' => array(
+      'name' => t('Initials'),
+      'description' => t("Works best with the 'Username' data source."),
+      'url' => 'https://ui-avatars.com/',
+      'settings' => array('style', 'bg_color'),
+    ),
+    'multiavatar' => array(
+      'name' => t('Multiavatar'),
+      'url' => 'https://multiavatar.com/',
+      'settings' => array(),
     ),
   );
 }
@@ -36,58 +53,6 @@ function avatar_menu() {
 }
 
 /**
- * Implements hook_form_FORM_ID_alter for user_admin_settings.
- */
-function avatar_form_user_admin_settings_alter(&$form, &$form_state, $form_id) {
-  $config = config('avatar.settings');
-
-  // Add radio buttons for selecting avatar or uploaded pictures.
-  $form['personalization']['picture_type'] = array(
-    '#type' => 'radios',
-    '#title' => t('Picture type'),
-    '#options' => array(
-      'upload' => t('Upload (manual)'),
-      'avatar' => t('Avatar (automatic)'),
-      'fallback' => t('Upload, with avatar fallback'),
-    ),
-    '#default_value' => $config->get('picture_type'),
-    '#weight' => 1,
-    '#states' => array(
-      'invisible' => array(
-        ':input[name="user_pictures"]' => array('checked' => FALSE),
-      ),
-    ),
-    '#config' => 'avatar.settings',
-  );
-  $form['personalization']['picture_type']['upload']['#description'] = t('Let users manually upload their own pictures.');
-  $form['personalization']['picture_type']['avatar']['#description'] = t('Automatically generate avatars for users. See the <a href="@settings">Avatar settings</a> for configuration.', array('@settings' => url('admin/config/people/avatar')));
-  $form['personalization']['picture_type']['fallback']['#description'] = t("Avatars are generated for users who haven't uploaded a picture.");
-
-  // Customise the default form.
-  $form['personalization']['pictures']['#weight'] = 2;
-  $form['personalization']['pictures']['user_picture_default']['#states'] = array(
-    'visible' => array(
-      ':input[name="picture_type"]' => array('value' => 'upload'),
-    ),
-  );
-  $form['personalization']['pictures']['user_picture_dimensions']['#states'] = array(
-    'invisible' => array(
-      ':input[name="picture_type"]' => array('value' => 'avatar'),
-    ),
-  );
-  $form['personalization']['pictures']['user_picture_file_size']['#states'] = array(
-    'invisible' => array(
-      ':input[name="picture_type"]' => array('value' => 'avatar'),
-    ),
-  );
-  $form['personalization']['pictures']['user_picture_guidelines']['#states'] = array(
-    'invisible' => array(
-      ':input[name="picture_type"]' => array('value' => 'avatar'),
-    ),
-  );
-}
-
-/**
  * Page callback: Constructs a form for configuring user avatars.
  *
  * @see avatar_menu()
@@ -96,15 +61,24 @@ function avatar_settings_form($form, &$form_state) {
   $config = config('avatar.settings');
   $form['#config'] = 'avatar.settings';
 
+  // Get the list of avatar types.
+  $types = avatar_types();
+  $options = array();
+  foreach ($types as $type => $details) {
+    $options[$type] = $details['name'];
+  }
+
   $form['type'] = array(
     '#type' => 'radios',
     '#title' => t('Type'),
-    '#options' => array(
-      'initials' => t('Initials'),
-    ),
+    '#options' => $options,
     '#default_value' => $config->get('type'),
   );
-  $form['type']['initials']['#description'] = t("Works best with the 'Username' data source.");
+  foreach ($types as $type => $details) {
+    if (isset($details['description'])) {
+      $form['type'][$type]['#description'] = $details['description'];
+    }
+  }
 
   $form['data_source'] = array(
     '#type' => 'radios',
@@ -151,17 +125,117 @@ function avatar_settings_form($form, &$form_state) {
     ),
   );
 
-  return system_settings_form($form);
+  // As much as I'd like to just use system_settings_form() here, I need to
+  // customise the order in which the submit functions are called...
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Save configuration'),
+    ),
+  );
+  if (!empty($_POST) && form_get_errors()) {
+    backdrop_set_message(t('The settings have not been saved because of the errors.'), 'error');
+  }
+  $form['#submit'][] = 'system_settings_form_submit';
+  $form['#submit'][] = 'avatar_settings_form_submit';
+  $form['#theme'] = 'system_settings_form';
+
+  return $form;
+}
+
+/**
+ * Form submission handler for avatar_settings_form().
+ */
+function avatar_settings_form_submit($form, &$form_state) {
+  // Bulk regenerate user avatars.
+  avatar_bulk_generate();
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for user_admin_settings.
+ */
+function avatar_form_user_admin_settings_alter(&$form, &$form_state, $form_id) {
+  $config = config('avatar.settings');
+
+  // Add radio buttons for selecting avatar or uploaded pictures.
+  $form['personalization']['picture_type'] = array(
+    '#type' => 'radios',
+    '#title' => t('Picture type'),
+    '#options' => array(
+      'upload' => t('Upload (manual)'),
+      'avatar' => t('Avatar (automatic)'),
+      'fallback' => t('Upload, with avatar fallback'),
+    ),
+    '#default_value' => $config->get('picture_type'),
+    '#weight' => 1,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="user_pictures"]' => array('checked' => FALSE),
+      ),
+    ),
+    '#config' => 'avatar.settings',
+  );
+  $form['personalization']['picture_type']['upload']['#description'] = t('Let users manually upload their own pictures.');
+  $form['personalization']['picture_type']['avatar']['#description'] = t('Automatically generate avatars for users. See the <a href="@settings">Avatar settings</a> for configuration.', array('@settings' => url('admin/config/people/avatar')));
+  $form['personalization']['picture_type']['fallback']['#description'] = t("Avatars are generated for users who haven't uploaded a picture.");
+
+  // Customise the default form.
+  $form['personalization']['pictures']['#weight'] = 2;
+  $form['personalization']['pictures']['user_picture_default']['#states'] = array(
+    'visible' => array(
+      ':input[name="picture_type"]' => array('value' => 'upload'),
+    ),
+  );
+  $invisible = array(
+    'invisible' => array(
+      ':input[name="picture_type"]' => array('value' => 'avatar'),
+    ),
+  );
+  $form['personalization']['pictures']['user_picture_dimensions']['#states'] = $invisible;
+  $form['personalization']['pictures']['user_picture_file_size']['#states'] = $invisible;
+  $form['personalization']['pictures']['user_picture_guidelines']['#states'] = $invisible;
+
+  // Add a custom submit handler.
+  $form['#submit'][] = 'avatar_user_admin_settings_submit';
+}
+
+/**
+ * Form submission handler for user_admin_settings().
+ */
+function avatar_user_admin_settings_submit($form, &$form_state) {
+  $original_value = $form['personalization']['picture_type']['#default_value'];
+  $new_value = $form_state['values']['picture_type'];
+
+  // Bulk regenerate user avatars.
+  if ($new_value != 'upload' && $new_value != $original_value) {
+    avatar_bulk_generate();
+  }
+}
+
+/**
+ * Bulk generate user avatars.
+ */
+function avatar_bulk_generate() {
+  // Get all users.
+  $users = entity_load_multiple('user');
+
+  // Remove the anonymous user.
+  unset($users[0]);
+
+  // Save each user account to trigger avatar generation.
+  foreach ($users as $user) {
+    $user->avatar_regenerate = TRUE;
+    $user->save();
+  }
 }
 
 /**
  * Implements hook_form_FORM_ID_alter for user_profile_form.
  */
 function avatar_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
-  $config = config('avatar.settings');
-
   // Hide the picture form element(s).
-  if ($config->get('picture_type') == 'avatar') {
+  if (config_get('avatar.settings', 'picture_type') == 'avatar') {
     unset($form['picture']);
   }
 }
@@ -171,28 +245,46 @@ function avatar_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
  */
 function avatar_user_presave($account) {
   $config = config('avatar.settings');
+  $picture_type = $config->get('picture_type');
 
-  // Don't continue if avatars aren't needed.
-  if (!config_get('system.core', 'user_pictures') || $config->get('picture_type') == 'upload') {
+  // Skip if we're not using avatars.
+  if (!config_get('system.core', 'user_pictures') || $picture_type == 'upload') {
+    return;
+  }
+  // Skip if using the 'fallback' method and there's an existing picture.
+  if ($picture_type == 'fallback' && !empty($account->picture)) {
     return;
   }
 
   // Check if a new avatar is needed.
-  $regenerate = FALSE;
+  $generate = FALSE;
   $data_source = $config->get('data_source');
-  if ($data_source == 'username' && trim($account->name) != trim($account->original->name)) {
-    $regenerate = TRUE;
+  // Always generate avatar if there's no existing picture.
+  if (empty($account->picture)) {
+    $generate = TRUE;
   }
-  elseif ($data_source == 'email' && trim(backdrop_strtolower($account->mail)) != trim(backdrop_strtolower($account->original->mail))) {
-    $regenerate = TRUE;
+  elseif ($picture_type == 'avatar') {
+    // Generate avatar if doing a bulk update.
+    if (!empty($account->avatar_regenerate)) {
+      $generate = TRUE;
+    }
+    // Generate avatar if the username changes.
+    elseif ($data_source == 'username' && trim($account->name) != trim($account->original->name)) {
+      $generate = TRUE;
+    }
+    // Generate avatar if the email address changes.
+    elseif ($data_source == 'email' && trim(backdrop_strtolower($account->mail)) != trim(backdrop_strtolower($account->original->mail))) {
+      $generate = TRUE;
+    }
   }
 
   // Generate an avatar.
-  if (empty($account->picture) || $regenerate) {
+  if ($generate) {
     $file = avatar_generate($account);
 
     if (isset($file->fid)) {
       $account->picture = $file->fid;
+      unset($account->avatar_regenerate);
     }
   }
 }
@@ -220,13 +312,18 @@ function avatar_generate($user) {
     case 'initials':
       $rounded = $config->get('style') == 'round' ? 'true' : 'false';
 
-      // Since this type doesn't support transparency, we default to 'random'.
+      // Since this type doesn't support transparency, default to 'random'.
       $background = 'random';
+      $foreground = 'ffffff';
       if ($config->get('bg_color') == 'value') {
         $background = str_replace('#', '', $config->get('bg_color_value'));
+        $foreground = avatar_get_fg_color($background);
       }
 
-      $url = "https://ui-avatars.com/api/?name=$string&size=256&rounded=$rounded&background=$background&format=png";
+      $url = "https://ui-avatars.com/api/?name=$string&size=256&rounded=$rounded&background=$background&color=$foreground&format=png";
+      break;
+    case 'multiavatar':
+      $url = "https://api.multiavatar.com/$string.png";
       break;
     default:
       return;
@@ -244,15 +341,24 @@ function avatar_generate($user) {
 }
 
 /**
- * Return a list of avatar types and the settings they support.
+ * Get the appropriate foreground colour based on the given background colour.
+ *
+ * @see https://github.com/LasseRafn/ui-avatars/issues/2#issuecomment-337170078
+ * @see https://stackoverflow.com/a/3943023/4168619
  */
-function avatar_types() {
-  return array(
-    'initials' => array(
-      'name' => t('Initials'),
-      'settings' => array(
+function avatar_get_fg_color($bg_color) {
+  $fg_color = 'ffffff';
 
-      ),
-    ),
+  $rgb = array(
+    'red' => base_convert(substr($bg_color, 0, 2), 16, 10),
+    'green' => base_convert(substr($bg_color, 2, 2), 16, 10),
+    'blue' => base_convert(substr($bg_color, 4, 2), 16, 10)
   );
+  $intensity = ($rgb['red'] * 0.299) + ($rgb['green'] * 0.587) + ($rgb['blue'] * 0.114);
+
+  if ($intensity > 149) {
+    $fg_color = '000000';
+  }
+
+  return $fg_color;
 }
