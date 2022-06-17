@@ -3,7 +3,11 @@
     "picture_type": "upload",
     "type": "initials",
     "data_source": "username",
-    "style": "square",
-    "bg_color": "random",
-    "bg_color_value": "#000000"
+    "initials_rounded": 0,
+    "initials_bg": "random",
+    "initials_bg_color": "#000000",
+    "identicon_config": "",
+    "robots_set": "set1",
+    "robots_bg": "bg0",
+    "minecraft_type": "avatar"
 }

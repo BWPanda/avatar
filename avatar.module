@@ -1,9 +1,7 @@
 <?php
 /**
  * @file
- * Automatically generate avatars for user accounts.
- *
- * TODO: Setup states for avatar types.
+ * Automatically generate unique avatars for user accounts.
  */
 
 /**
@@ -27,12 +25,33 @@ function avatar_types() {
       'name' => t('Initials'),
       'description' => t("Works best with the 'Username' data source."),
       'url' => 'https://ui-avatars.com/',
-      'settings' => array('style', 'bg_color'),
+      'settings' => array('initials_rounded', 'initials_bg'),
     ),
-    'multiavatar' => array(
-      'name' => t('Multiavatar'),
+    'multicultural' => array(
+      'name' => t('Multicultural'),
       'url' => 'https://multiavatar.com/',
       'settings' => array(),
+    ),
+    'identicon' => array(
+      'name' => t('Identicon'),
+      'url' => 'https://jdenticon.com/',
+//       'settings' => array('identicon_config'),
+      'settings' => array(),
+    ),
+    'robots' => array(
+      'name' => t('Robots'),
+      'url' => 'https://robohash.org/',
+      'settings' => array('robots_set', 'robots_bg'),
+    ),
+    'minimal' => array(
+      'name' => t('Minimal'),
+      'url' => 'https://minimalavatars.com/',
+      'settings' => array(),
+    ),
+    'minecraft' => array(
+      'name' => t('Minecraft'),
+      'url' => 'https://minotar.net/',
+      'settings' => array('minecraft_type'),
     ),
   );
 }
@@ -61,11 +80,23 @@ function avatar_settings_form($form, &$form_state) {
   $config = config('avatar.settings');
   $form['#config'] = 'avatar.settings';
 
-  // Get the list of avatar types.
-  $types = avatar_types();
-  $options = array();
-  foreach ($types as $type => $details) {
+  // Setup the options and descriptions for avatar types.
+  $options = $option_descriptions = $states = array();
+  foreach (avatar_types() as $type => $details) {
     $options[$type] = $details['name'];
+
+    $description = isset($details['description']) ? $details['description'] . '<br>' : '';
+    $link = l($details['url'], $details['url'], array('attributes' => array('target' => '_blank')));
+    $option_descriptions[$type]['#description'] = $description . $link;
+
+    if (empty($details['settings'])) {
+      $states['options']['invisible'][] = array(':input[name="type"]' => array('value' => $type));
+    }
+    else {
+      foreach ($details['settings'] as $setting) {
+        $states[$setting]['visible'][] = array(':input[name="type"]' => array('value' => $type));
+      }
+    }
   }
 
   $form['type'] = array(
@@ -74,11 +105,7 @@ function avatar_settings_form($form, &$form_state) {
     '#options' => $options,
     '#default_value' => $config->get('type'),
   );
-  foreach ($types as $type => $details) {
-    if (isset($details['description'])) {
-      $form['type'][$type]['#description'] = $details['description'];
-    }
-  }
+  $form['type'] += $option_descriptions;
 
   $form['data_source'] = array(
     '#type' => 'radios',
@@ -95,34 +122,90 @@ function avatar_settings_form($form, &$form_state) {
   $form['data_source']['email']['#description'] = t("Avatars will be re-generated whenever a user's email address is updated (not case-sentitive).");
   $form['data_source']['uid']['#description'] = t("Avatars will never be re-generated (since a user's ID never changes).");
 
-  $form['style'] = array(
-    '#type' => 'select',
-    '#title' => 'Style',
-    '#options' => array(
-      'square' => t('Square'),
-      'round' => t('Round'),
-    ),
-    '#default_value' => $config->get('style'),
+  $form['options'] = array(
+    '#type' => 'details',
+    '#summary' => t('Options'),
+    '#open' => TRUE,
+    '#states' => $states['options'],
   );
 
-  $form['bg_color'] = array(
+  $form['options']['initials_rounded'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Rounded',
+    '#default_value' => $config->get('initials_rounded'),
+    '#states' => $states['initials_rounded'],
+  );
+
+  $form['options']['initials_bg'] = array(
     '#type' => 'select',
-    '#title' => 'Background colour',
+    '#title' => 'Background',
     '#options' => array(
       'random' => t('Random'),
-      'transparent' => t('Transparent'),
-      'value' => t('Set value...'),
+      'color' => t('Colour'),
     ),
-    '#default_value' => $config->get('bg_color'),
+    '#default_value' => $config->get('initials_bg'),
+    '#states' => $states['initials_bg'],
   );
-  $form['bg_color_value'] = array(
+  $form['options']['initials_bg_color'] = array(
     '#type' => 'color',
-    '#default_value' => $config->get('bg_color_value'),
-    '#states' => array(
+    '#description' => t('The foreground (either white or black) will be determined automatically based on the colour selected here.'),
+    '#default_value' => $config->get('initials_bg_color'),
+    '#states' => array_merge_recursive($states['initials_bg'], array(
       'visible' => array(
-        ':input[name="bg_color"]' => array('value' => 'value'),
+        ':input[name="initials_bg"]' => array('value' => 'color'),
       ),
+    )),
+  );
+
+//   // Needs https://github.com/aarohmankad/identicon-api/issues/4 fixed to work.
+//   $form['options']['identicon_config'] = array(
+//     '#type' => 'textfield',
+//     '#title' => 'Design config',
+//     '#description' => t('Customise the design using the <a href="@designer" target="_blank">Icon designer</a>, then paste the generated config value here.', array(
+//       '@designer' => 'https://jdenticon.com/icon-designer.html',
+//     )),
+//     '#default_value' => $config->get('identicon_config'),
+//     '#states' => $states['identicon_config'],
+//   );
+
+  $form['options']['robots_set'] = array(
+    '#type' => 'select',
+    '#title' => t('Group'),
+    '#options' => array(
+      'set1' => t('Robots'),
+      'set2' => t('Monsters'),
+      'set3' => t('Robot heads'),
+      'set4' => t('Kittens'),
+//       // set5 is problematic: https://github.com/e1ven/Robohash/issues/37
+//       'set5' => t('Humans'),
     ),
+    '#default_value' => $config->get('robots_set'),
+    '#states' => $states['robots_set'],
+  );
+
+  $form['options']['robots_bg'] = array(
+    '#type' => 'select',
+    '#title' => t('Background'),
+    '#options' => array(
+      'bg0' => t('Transparent'),
+      'bg1' => t('Locations'),
+      'bg2' => t('Abstract'),
+    ),
+    '#default_value' => $config->get('robots_bg'),
+    '#states' => $states['robots_bg'],
+  );
+
+  $form['options']['minecraft_type'] = array(
+    '#type' => 'select',
+    '#title' => t('Group'),
+    '#options' => array(
+      'avatar' => t('Regular'),
+      'helm' => t('Helmets'),
+      'cube' => t('3D heads'),
+      'bust' => t('Busts'),
+    ),
+    '#default_value' => $config->get('minecraft_type'),
+    '#states' => $states['minecraft_type'],
   );
 
   // As much as I'd like to just use system_settings_form() here, I need to
@@ -137,8 +220,7 @@ function avatar_settings_form($form, &$form_state) {
   if (!empty($_POST) && form_get_errors()) {
     backdrop_set_message(t('The settings have not been saved because of the errors.'), 'error');
   }
-  $form['#submit'][] = 'system_settings_form_submit';
-  $form['#submit'][] = 'avatar_settings_form_submit';
+  $form['#submit'] = array('system_settings_form_submit', 'avatar_settings_form_submit');
   $form['#theme'] = 'system_settings_form';
 
   return $form;
@@ -217,13 +299,11 @@ function avatar_user_admin_settings_submit($form, &$form_state) {
  * Bulk generate user avatars.
  */
 function avatar_bulk_generate() {
-  // Get all users.
+  // Get all users except anonymous.
   $users = entity_load_multiple('user');
-
-  // Remove the anonymous user.
   unset($users[0]);
 
-  // Save each user account to trigger avatar generation.
+  // Save each user account to trigger avatar regeneration.
   foreach ($users as $user) {
     $user->avatar_regenerate = TRUE;
     $user->save();
@@ -308,23 +388,50 @@ function avatar_generate($user) {
   }
 
   // Generate the avatar URL.
+  $size = 256;
+  $format = 'png';
   switch ($config->get('type')) {
     case 'initials':
-      $rounded = $config->get('style') == 'round' ? 'true' : 'false';
+      $rounded = $config->get('initials_rounded') ? 'true' : 'false';
 
-      // Since this type doesn't support transparency, default to 'random'.
       $background = 'random';
       $foreground = 'ffffff';
-      if ($config->get('bg_color') == 'value') {
-        $background = str_replace('#', '', $config->get('bg_color_value'));
+      if ($config->get('initials_bg') == 'color') {
+        $background = str_replace('#', '', $config->get('initials_bg_color'));
         $foreground = avatar_get_fg_color($background);
       }
 
-      $url = "https://ui-avatars.com/api/?name=$string&size=256&rounded=$rounded&background=$background&color=$foreground&format=png";
+      $url = "https://ui-avatars.com/api/?name=$string&size=$size&rounded=$rounded&background=$background&color=$foreground&format=$format";
       break;
-    case 'multiavatar':
-      $url = "https://api.multiavatar.com/$string.png";
+
+    case 'multicultural':
+      $url = "https://api.multiavatar.com/$string.$format";
       break;
+
+    case 'identicon':
+      $config = $config->get('identicon_config');
+
+      $url = "https://identicon-api.herokuapp.com/$string/$size?config=$config&format=$format";
+      break;
+
+    case 'robots':
+      $size = $size . 'x' . $size;
+      $set = $config->get('robots_set');
+      $bg = $config->get('robots_bg');
+
+      $url = "https://robohash.org/$string.$format?size=$size&set=$set&bgset=$bg";
+      break;
+
+    case 'minimal':
+      $url = "https://api.minimalavatars.com/avatar/$string/png";
+      break;
+
+    case 'minecraft':
+      $type = $config->get('minecraft_type');
+
+      $url = "https://minotar.net/$type/$string/$size.$format";
+      break;
+
     default:
       return;
   }
@@ -361,4 +468,39 @@ function avatar_get_fg_color($bg_color) {
   }
 
   return $fg_color;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function avatar_block_info() {
+  return array(
+    'attribution' => array(
+      'info' => t('Avatar attribution'),
+      'description' => t('Display a link to the website that generates the avatars currently in-use.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function avatar_block_view($delta = '', $settings = array(), $contexts = array()) {
+  $block = array();
+
+  if ($delta == 'attribution') {
+    $block['subject'] = $block['content'] = NULL;
+
+    $config = config('avatar.settings');
+    if (config_get('system.core', 'user_pictures') && $config->get('picture_type') != 'upload') {
+      $avatar_types = avatar_types();
+      $url = $avatar_types[$config->get('type')]['url'];
+
+      $block['content'] = t('Auto-generated avatars by <a href="@url" target="_blank">@url</a>', array(
+        '@url' => $url,
+      ));
+    }
+  }
+
+  return $block;
 }

@@ -1,6 +1,6 @@
 type = module
 name = Avatar
-description = Automatically generate avatars for user accounts.
+description = Automatically generate unique avatars for user accounts.
 backdrop = 1.x
 configure = admin/config/people/avatar
 tags[] = Account Management

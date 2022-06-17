@@ -1,28 +1,14 @@
-The Name of My Module
-=====================
+Avatar
+======
 
-My Module enables you to...
+Avatar automatically generates unique pictures for user accounts. This is useful
+for community sites, like forums, where you want to visually differentiate users
+from each other, but still have a consistent look throughout.
 
-The first paragraph of this file should be kept short as it will be used as the
-project summary on BackdropCMS.org. Aim for about 240 characters (three lines at
-80 characters each).
-
-All lines in this file should be no more than 80 characters long for legibility,
-unless including a URL or example that requires the line to not wrap. (The first
-line of this paragraph is 80 characters for reference.)
-
-Detail in READMEs should be limited to the minimum required for installation and
-getting started. More detailed documentation should be moved to a GitHub wiki
-page; for example: https://github.com/backdrop-contrib/setup/wiki/Documentation.
-
-
-Requirements
-------------
-
-This module requires that the following modules are also enabled:
-
-- [Example module](https://github.com/backdrop-contrib/example_module)
-- [Dummy library](https://github.com/backdrop-contrib/dummy_library)
+Avatars can either be generated for all users automatically, or used as a
+fallback for when users don't upload their own, custom pictures. The are
+multiple avatar types to choose from, and you can decide whether they're
+generated based off the user's username, email address, or user ID.
 
 
 Installation
@@ -31,41 +17,36 @@ Installation
 - Install this module using the official Backdrop CMS instructions at
   https://docs.backdropcms.org/documentation/extend-with-modules.
 
-- Visit the configuration page under Administration > Configuration > Category >
-  My Module (admin/config/category/my_module) and enter the required
-  information.
+- Visit the Account Settings page under Administration > Configuration > User
+  Accounts (admin/config/people/settings), enable User Pictures, then choose
+  whether avatars will be generated for all users, or only as a fallback.
 
-- Additional steps go here...
+- Visit the configuration page under Administration > Configuration > User
+  Accounts > Avatar Settings (admin/config/people/avatar) to choose the avatar
+  type and other various options.
 
-
-Documentation
--------------
-
-Additional documentation is located in the Wiki:
-https://github.com/backdrop-contrib/my_module/wiki/Documentation.
+- Optionally, enable the Avatar Attribution block to display a link to the
+  website that generates your avatars. See
+  https://docs.backdropcms.org/documentation/blocks for details.
 
 
 Issues
 ------
 
 Bugs and Feature Requests should be reported in the Issue Queue:
-https://github.com/backdrop-contrib/my_module/issues.
+https://github.com/backdrop-contrib/avatar/issues.
 
 
 Current Maintainers
 -------------------
 
-- [Your Name](https://github.com/username)
-- Seeking additional maintainers
+- [Peter Anderson](https://github.com/BWPanda)
 
 
 Credits
 -------
 
-- Ported to Backdrop CMS by [Your Name](https://github.com/username).
-- Originally written for Drupal by [Someone Else](https://github.com/username).
-- Based on [Some Other project](https://github.com/example).
-- Sponsored by [An Organization](https://example.org).
+- Created for Backdrop CMS by [Peter Anderson](https://github.com/BWPanda).
 
 
 License
