@@ -6,7 +6,7 @@ for community sites, like forums, where you want to visually differentiate users
 from each other, but still have a consistent look throughout.
 
 Avatars can either be generated for all users automatically, or used as a
-fallback for when users don't upload their own, custom pictures. The are
+fallback for when users don't upload their own, custom pictures. There are
 multiple avatar types to choose from, and you can decide whether they're
 generated based off the user's username, email address, or user ID.
 
