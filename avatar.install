@@ -1,0 +1,13 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the Avatar module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function avatar_install() {
+  // Higher weight needed to run after other modules that alter username.
+  module_set_weight('avatar', 5);
+}
