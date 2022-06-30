@@ -11,3 +11,10 @@ function avatar_install() {
   // Higher weight needed to run after other modules that alter username.
   module_set_weight('avatar', 5);
 }
+
+/**
+ * Make sure the correct module weight is set.
+ */
+function avatar_update_1100() {
+  module_set_weight('avatar', 5);
+}
