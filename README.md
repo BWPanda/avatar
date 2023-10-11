@@ -40,7 +40,7 @@ https://github.com/backdrop-contrib/avatar/issues.
 Current Maintainers
 -------------------
 
-- [Peter Anderson](https://github.com/BWPanda)
+- Seeking maintainer(s)
 
 
 Credits
